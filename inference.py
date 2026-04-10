@@ -50,7 +50,7 @@ BENCHMARK: str = "multiturn_technical_interviewer"
 MAX_STEPS: int = 10          # safety ceiling; episodes end via done=True
 SUCCESS_SCORE_THRESHOLD: float = 0.40   # average reward >= this → success
 TEMPERATURE: float = 0.3     # lower temperature for more focused answers
-MAX_TOKENS: int = 400        # keep responses concise to avoid WS keepalive timeout
+MAX_TOKENS: int = 280        # short answers reduce LLM latency → fewer WS keepalive timeouts
 
 # ---------------------------------------------------------------------------
 # Logging helpers (mandatory format)
@@ -116,7 +116,8 @@ SYSTEM_PROMPT = textwrap.dedent(
     - Cover edge cases proactively.
     - For distributed systems questions, address: sharding, replication,
       consistency, failure handling, and latency.
-    - Keep answers focused (150–400 words). Do not pad with filler text.
+    - Keep each answer brief: at most ~180 words, tight bullets or short paragraphs.
+      Long answers risk timing out the connection to the environment server.
     - Reply with ONLY your answer — no meta-commentary like
       "As a candidate, I would say...".
     """
@@ -238,6 +239,10 @@ async def run_episode(
         print(f"[DEBUG] env.reset() failed: {exc}", flush=True)
         log_start(task="error", env=BENCHMARK, model=MODEL_NAME)
         log_end(success=False, steps=0, score=0.0, rewards=[])
+        try:
+            await env.disconnect()
+        except Exception:
+            pass
         return
 
     obs = reset_result.observation
@@ -308,6 +313,13 @@ async def run_episode(
 
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+        # Drop the WebSocket so the next episode opens a fresh connection.
+        # One long LLM call can exceed the server's WS keepalive; a dead socket
+        # would make the following reset() fail with 1011.
+        try:
+            await env.disconnect()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------

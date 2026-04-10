@@ -17,10 +17,14 @@ STDOUT FORMAT (strictly required by the evaluator)
   [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
   [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 
-Three episodes are run in sequence, one per task:
-  1. two_sum      (easy)
-  2. lru_cache    (medium)
-  3. rate_limiter (hard)
+Five episodes are run in sequence, one per task (server cycles TASK_ORDER):
+  1. two_sum        (easy)
+  2. lru_cache      (medium)
+  3. median_stream  (medium)
+  4. rate_limiter   (hard)
+  5. message_queue  (hard)
+
+Override count with NUM_EPISODES (e.g. NUM_EPISODES=1 for a single episode).
 """
 
 import asyncio
@@ -45,6 +49,9 @@ API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1"
 MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 
 BENCHMARK: str = "multiturn_technical_interviewer"
+
+# One full pass over server TASK_ORDER (two_sum → … → message_queue)
+NUM_EPISODES: int = max(1, int(os.getenv("NUM_EPISODES", "5")))
 
 # Per-episode limits
 MAX_STEPS: int = 10          # safety ceiling; episodes end via done=True
@@ -330,13 +337,13 @@ async def main() -> None:
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
     if IMAGE_NAME:
-        # Docker mode: start ONE container for all 3 episodes.
+        # Docker mode: start ONE container for all episodes.
         # The server's module-level counter cycles tasks on each reset().
-        # Using a single container avoids creating 3 fresh containers (each
+        # Using a single container avoids creating fresh containers (each
         # with counter=0) which would always return the first task.
         env = await MultiturnTechnicalInterviewerEnv.from_docker_image(IMAGE_NAME)
         try:
-            for _ in range(3):
+            for _ in range(NUM_EPISODES):
                 await run_episode(env, client)
         finally:
             try:
@@ -348,7 +355,7 @@ async def main() -> None:
         # keepalive timeout during slow LLM calls.  The server's module-level
         # counter persists across connections within the same process, so task
         # cycling works correctly.
-        for _ in range(3):
+        for _ in range(NUM_EPISODES):
             env = MultiturnTechnicalInterviewerEnv(base_url=BASE_URL)
             try:
                 await run_episode(env, client)

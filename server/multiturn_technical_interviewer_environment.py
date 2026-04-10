@@ -573,6 +573,23 @@ TASK_ORDER = ["two_sum", "lru_cache", "rate_limiter"]
 
 
 # ---------------------------------------------------------------------------
+# Module-level episode counter
+# ---------------------------------------------------------------------------
+# A module-level integer is the most reliable shared state in a single-process
+# uvicorn server.  It outlives any number of environment instances and WebSocket
+# sessions without needing class-attribute tricks.
+#
+# The INTERVIEW_TASK env var can pin the first task (default: "two_sum").
+
+def _initial_index() -> int:
+    task = os.getenv("INTERVIEW_TASK", "two_sum")
+    return TASK_ORDER.index(task) if task in TASK_ORDER else 0
+
+
+_episode_counter: int = _initial_index()
+
+
+# ---------------------------------------------------------------------------
 # Environment class
 # ---------------------------------------------------------------------------
 
@@ -598,38 +615,20 @@ class MultiturnTechnicalInterviewerEnvironment(Environment):
 
     Implementation note
     -------------------
-    ``_global_episode_index`` is a **class-level** counter so that it is
-    shared across all server-side instances.  The OpenEnv framework creates
-    a fresh instance for every WebSocket session, so an instance-level counter
-    would reset to 0 on every new connection and always return ``two_sum``.
-    The class-level counter survives reconnections and advances correctly
-    through the three tasks even when the inference script opens a new
-    connection per episode.
+    Task cycling relies on the module-level ``_episode_counter``.  It is
+    shared across all class instances in the same server process regardless of
+    how many WebSocket sessions open and close, so consecutive reset() calls
+    always advance through the task sequence correctly.
     """
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
-    # Shared across every instance on this server process so task cycling
-    # works correctly even when a new env instance is created per WS session.
-    _global_episode_index: int = 0
-
     def __init__(self) -> None:
-        start_task = os.getenv("INTERVIEW_TASK", "two_sum")
-        if start_task not in TASKS:
-            start_task = "two_sum"
-
-        # Align the class-level counter to the requested start task only on
-        # the very first instantiation (index == 0 and env var is set).
-        if MultiturnTechnicalInterviewerEnvironment._global_episode_index == 0:
-            MultiturnTechnicalInterviewerEnvironment._global_episode_index = (
-                TASK_ORDER.index(start_task)
-            )
-
         self._state = State(episode_id=str(uuid4()), step_count=0)
 
-        # Per-episode mutable state
-        self._task_name: str = start_task
-        self._task_cfg: Dict[str, Any] = TASKS[start_task]
+        # Per-episode mutable state (populated on reset())
+        self._task_name: str = TASK_ORDER[0]
+        self._task_cfg: Dict[str, Any] = TASKS[TASK_ORDER[0]]
         self._current_turn: int = 0
         self._history: List[str] = []
         self._rewards: List[float] = []
@@ -638,13 +637,9 @@ class MultiturnTechnicalInterviewerEnvironment(Environment):
     # ------------------------------------------------------------------
     def reset(self) -> MultiturnTechnicalInterviewerObservation:
         """Reset the environment and advance to the next task."""
-        # Cycle through tasks using the class-level counter so the sequence
-        # advances correctly even when a new instance is created per session.
-        task_name = TASK_ORDER[
-            MultiturnTechnicalInterviewerEnvironment._global_episode_index
-            % len(TASK_ORDER)
-        ]
-        MultiturnTechnicalInterviewerEnvironment._global_episode_index += 1
+        global _episode_counter
+        task_name = TASK_ORDER[_episode_counter % len(TASK_ORDER)]
+        _episode_counter += 1
 
         self._task_name = task_name
         self._task_cfg = TASKS[task_name]

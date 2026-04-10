@@ -314,32 +314,37 @@ async def run_episode(
 # Main
 # ---------------------------------------------------------------------------
 
-async def make_env() -> MultiturnTechnicalInterviewerEnv:
-    """
-    Create a fresh environment connection for a single episode.
-
-    A new connection is opened for every episode so that a slow LLM call
-    during one task cannot cause a WebSocket keepalive timeout that would
-    break subsequent tasks.
-    """
-    if IMAGE_NAME:
-        return await MultiturnTechnicalInterviewerEnv.from_docker_image(IMAGE_NAME)
-    return MultiturnTechnicalInterviewerEnv(base_url=BASE_URL)
-
-
 async def main() -> None:
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
-    # One fresh connection per task — prevents WS keepalive timeout across tasks
-    for _ in range(3):
-        env = await make_env()
+    if IMAGE_NAME:
+        # Docker mode: start ONE container for all 3 episodes.
+        # The server's module-level counter cycles tasks on each reset().
+        # Using a single container avoids creating 3 fresh containers (each
+        # with counter=0) which would always return the first task.
+        env = await MultiturnTechnicalInterviewerEnv.from_docker_image(IMAGE_NAME)
         try:
-            await run_episode(env, client)
+            for _ in range(3):
+                await run_episode(env, client)
         finally:
             try:
                 await env.close()
             except Exception as exc:
                 print(f"[DEBUG] env.close() error: {exc}", flush=True)
+    else:
+        # Server mode (BASE_URL): fresh WS connection per episode to avoid
+        # keepalive timeout during slow LLM calls.  The server's module-level
+        # counter persists across connections within the same process, so task
+        # cycling works correctly.
+        for _ in range(3):
+            env = MultiturnTechnicalInterviewerEnv(base_url=BASE_URL)
+            try:
+                await run_episode(env, client)
+            finally:
+                try:
+                    await env.close()
+                except Exception as exc:
+                    print(f"[DEBUG] env.close() error: {exc}", flush=True)
 
 
 if __name__ == "__main__":

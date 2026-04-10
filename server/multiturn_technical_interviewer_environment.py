@@ -17,9 +17,11 @@ difficulty. The environment:
 
 Tasks
 -----
-two_sum      (easy,   5 turns) – algorithm + optimisation + distribution
-lru_cache    (medium, 6 turns) – data-structure design + concurrency + scale
-rate_limiter (hard,   7 turns) – distributed systems design end-to-end
+two_sum        (easy,   5 turns) – algorithm + optimisation + distribution
+lru_cache      (medium, 6 turns) – data-structure design + concurrency + scale
+median_stream  (medium, 6 turns) – heap design + streaming + sliding window
+rate_limiter   (hard,   7 turns) – distributed systems design end-to-end
+message_queue  (hard,   7 turns) – distributed message queue à la Kafka
 
 Reward
 ------
@@ -398,7 +400,155 @@ TASKS: Dict[str, Dict[str, Any]] = {
     },
 
     # ------------------------------------------------------------------ #
-    # TASK 3 – Distributed Rate Limiter (Hard, 7 graded turns)            #
+    # TASK 3 – Median of a Data Stream (Medium, 6 graded turns)           #
+    # ------------------------------------------------------------------ #
+    "median_stream": {
+        "display_name": "Median of a Data Stream",
+        "difficulty": "medium",
+        "problem": (
+            "**Problem: Median of a Data Stream**\n\n"
+            "Design a data structure that supports two operations on a "
+            "continuous stream of integers:\n"
+            "  • `addNum(num)` – adds the integer to the data structure.\n"
+            "  • `findMedian()` – returns the median of all numbers seen so far.\n\n"
+            "The **median** is the middle value in a sorted list. "
+            "For an even count of elements, return the mean of the two middle values.\n\n"
+            "Example:\n"
+            "  addNum(1)       # stream: [1]            → median: 1.0\n"
+            "  addNum(2)       # stream: [1, 2]         → median: 1.5\n"
+            "  addNum(3)       # stream: [1, 2, 3]      → median: 2.0\n\n"
+            "**Constraint:** `findMedian()` should be as fast as possible.\n\n"
+            "**Your task:** Describe your data structure choice and implement "
+            "both operations. What complexity do you achieve?"
+        ),
+        "turns": [
+            # Turn 1 — Initial design
+            {
+                "question": (
+                    "Why did you choose two heaps (a max-heap and a min-heap)? "
+                    "Walk me through **exactly** how `addNum` maintains balance "
+                    "between the heaps and how `findMedian` reads from them."
+                ),
+                "required_groups": [
+                    ["max heap", "min heap", "heap", "priority queue"],
+                    ["balance", "equal size", "size difference", "rebalance",
+                     "transfer", "move", "pop", "push"],
+                    ["median", "top", "peek", "root", "findmedian"],
+                ],
+                "bonus": [
+                    "max heap lower half", "min heap upper half",
+                    "size differs by at most 1", "o(1) findmedian",
+                    "heappush", "heappop", "negate",
+                ],
+                "min_length": 60,
+            },
+            # Turn 2 — Complexity analysis
+            {
+                "question": (
+                    "State the **time and space complexity** of each operation. "
+                    "Is there a simpler data structure (e.g., a sorted list) "
+                    "that also works? Compare its complexity to the two-heap approach."
+                ),
+                "required_groups": [
+                    ["o(log n)", "log n", "o(1)", "time complexity"],
+                    ["sorted", "sorted list", "sorted array", "bisect",
+                     "insertion sort", "binary search"],
+                    ["compare", "trade-off", "tradeoff", "slower", "faster",
+                     "better", "worse", "differ"],
+                ],
+                "bonus": [
+                    "o(log n) add", "o(1) findmedian", "o(n) insertion",
+                    "binary search insertion", "space o(n)",
+                ],
+                "min_length": 50,
+            },
+            # Turn 3 — Edge cases
+            {
+                "question": (
+                    "What **edge cases** must your implementation handle? "
+                    "Consider: empty stream, a single element, duplicate values, "
+                    "and very large or very small integers."
+                ),
+                "required_groups": [
+                    ["edge case", "empty", "single element", "one element",
+                     "duplicate", "empty stream"],
+                    ["handle", "check", "guard", "when", "if", "return",
+                     "special case"],
+                ],
+                "bonus": [
+                    "empty stream return none", "single element median",
+                    "duplicate values", "integer overflow", "negative numbers",
+                    "float precision",
+                ],
+                "min_length": 40,
+            },
+            # Turn 4 — Streaming at scale
+            {
+                "question": (
+                    "Now the stream has **1 billion numbers** — too large to fit "
+                    "in memory. How do you compute an **approximate median** "
+                    "without storing all values? Describe at least one approach."
+                ),
+                "required_groups": [
+                    ["approximate", "estimate", "sketch", "sample",
+                     "reservoir", "histogram", "bucket", "quantile"],
+                    ["memory", "space", "fit", "large", "billion",
+                     "streaming", "out-of-core"],
+                ],
+                "bonus": [
+                    "reservoir sampling", "count-min sketch",
+                    "t-digest", "p2 algorithm", "histogram buckets",
+                    "random sampling", "percentile estimation",
+                    "approximate quantile",
+                ],
+                "min_length": 50,
+            },
+            # Turn 5 — Sliding window variant
+            {
+                "question": (
+                    "Now find the **sliding window median**: given an array of "
+                    "integers and a window size `k`, return the median of every "
+                    "window. How does your two-heap approach need to change? "
+                    "What is the complexity?"
+                ),
+                "required_groups": [
+                    ["sliding window", "window", "remove", "delete", "evict",
+                     "lazy deletion", "expiry"],
+                    ["heap", "priority queue", "rebalance", "insert"],
+                ],
+                "bonus": [
+                    "lazy deletion", "mark invalid", "delay removal",
+                    "o(n log k)", "sorted container", "sortedlist",
+                    "balanced bst", "order statistics tree",
+                ],
+                "min_length": 50,
+            },
+            # Turn 6 — Final review
+            {
+                "question": (
+                    "**Final review:** Summarise your design. "
+                    "State the complexity of both operations, highlight the main "
+                    "edge cases you handled, and identify the single biggest "
+                    "limitation of the two-heap approach."
+                ),
+                "required_groups": [
+                    ["o(log n)", "log n", "o(1)", "complexity"],
+                    ["edge case", "empty", "duplicate", "single"],
+                    ["limitation", "drawback", "trade-off", "tradeoff",
+                     "challenge", "issue", "weakness"],
+                ],
+                "bonus": [
+                    "o(log n) add", "o(1) findmedian", "space o(n)",
+                    "not suitable for deletion", "approximate for large streams",
+                    "sliding window", "two heaps",
+                ],
+                "min_length": 60,
+            },
+        ],
+    },
+
+    # ------------------------------------------------------------------ #
+    # TASK 4 – Distributed Rate Limiter (Hard, 7 graded turns)            #
     # ------------------------------------------------------------------ #
     "rate_limiter": {
         "display_name": "Distributed Rate Limiter",
@@ -566,10 +716,196 @@ TASKS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+
+    # ------------------------------------------------------------------ #
+    # TASK 5 – Distributed Message Queue (Hard, 7 graded turns)           #
+    # ------------------------------------------------------------------ #
+    "message_queue": {
+        "display_name": "Distributed Message Queue",
+        "difficulty": "hard",
+        "problem": (
+            "**Problem: Distributed Message Queue**\n\n"
+            "Design a **distributed message queue** (similar in spirit to Apache "
+            "Kafka) with the following requirements:\n\n"
+            "  • Producers publish messages to named **topics**.\n"
+            "  • Multiple independent **consumer groups** can each read all messages "
+            "    at their own pace; one consumer group does not affect another.\n"
+            "  • Messages must be **durably stored** and survive broker restarts.\n"
+            "  • The system must support at least **1 million messages per second** "
+            "    across the cluster.\n"
+            "  • A single consumer in a group must always see messages from a given "
+            "    partition in the order they were produced.\n\n"
+            "**Your task:** Describe the high-level architecture. "
+            "What are the core components and how do producers send messages?"
+        ),
+        "turns": [
+            # Turn 1 — Core architecture
+            {
+                "question": (
+                    "Explain **partitioning**: why does Kafka-style partitioning "
+                    "enable both high throughput and ordering guarantees? "
+                    "How do producers decide which partition to write to?"
+                ),
+                "required_groups": [
+                    ["partition", "topic partition", "shard"],
+                    ["order", "ordering", "sequential", "per partition",
+                     "within partition"],
+                    ["partition key", "hash", "round robin", "key-based",
+                     "producer", "routing"],
+                ],
+                "bonus": [
+                    "partition key hash", "sticky partition", "round robin",
+                    "ordering within partition", "parallelism across partitions",
+                    "hot partition", "key skew",
+                ],
+                "min_length": 60,
+            },
+            # Turn 2 — Durability & persistence
+            {
+                "question": (
+                    "How do you guarantee **message durability**? "
+                    "Walk me through what happens on disk when a producer sends "
+                    "a message, and how the broker ensures it survives a crash."
+                ),
+                "required_groups": [
+                    ["disk", "persist", "write", "storage", "log",
+                     "append", "file"],
+                    ["write-ahead log", "wal", "log segment", "append-only",
+                     "sequential write", "fsync", "flush", "commit"],
+                    ["crash", "restart", "recover", "durable",
+                     "acknowledgment", "ack", "survive"],
+                ],
+                "bonus": [
+                    "write-ahead log", "append-only log", "log segment",
+                    "fsync before ack", "sequential io", "page cache",
+                    "index file", "offset index",
+                ],
+                "min_length": 60,
+            },
+            # Turn 3 — Consumer groups & offsets
+            {
+                "question": (
+                    "Explain **consumer groups and offset management**. "
+                    "How can two independent consumer groups both read every "
+                    "message without interfering with each other? "
+                    "Where are offsets stored and how are they committed?"
+                ),
+                "required_groups": [
+                    ["consumer group", "group", "independent", "isolated"],
+                    ["offset", "position", "cursor", "checkpoint",
+                     "commit offset"],
+                    ["store", "zookeeper", "kafka", "__consumer_offsets",
+                     "coordinator", "persist offset", "broker"],
+                ],
+                "bonus": [
+                    "__consumer_offsets topic", "group coordinator",
+                    "auto commit", "manual commit", "at-least-once",
+                    "exactly-once", "idempotent consumer",
+                    "offset reset", "earliest/latest",
+                ],
+                "min_length": 60,
+            },
+            # Turn 4 — Replication & leader election
+            {
+                "question": (
+                    "A broker node crashes mid-write. Describe your **replication "
+                    "strategy**: how many replicas, what is the in-sync replica "
+                    "(ISR) set, and how is a new partition leader elected?"
+                ),
+                "required_groups": [
+                    ["replica", "replication", "replicate", "copy",
+                     "replication factor"],
+                    ["leader", "follower", "leader election",
+                     "in-sync replica", "isr"],
+                    ["zookeeper", "raft", "controller", "elect",
+                     "failover", "new leader"],
+                ],
+                "bonus": [
+                    "in-sync replica set", "min.insync.replicas",
+                    "unclean leader election", "acks=all",
+                    "controller broker", "zookeeper coordination",
+                    "kafka raft", "kraft",
+                ],
+                "min_length": 60,
+            },
+            # Turn 5 — Delivery semantics
+            {
+                "question": (
+                    "Compare **at-most-once**, **at-least-once**, and "
+                    "**exactly-once** delivery semantics. "
+                    "Under what failure scenario does each occur, and how does "
+                    "Kafka's idempotent producer achieve exactly-once?"
+                ),
+                "required_groups": [
+                    ["at-most-once", "at least once", "exactly-once",
+                     "delivery semantic"],
+                    ["duplicate", "redelivery", "retry", "idempotent",
+                     "loss"],
+                    ["producer id", "sequence number", "idempotent producer",
+                     "transaction", "exactly once", "eos",
+                     "transactional producer"],
+                ],
+                "bonus": [
+                    "idempotent producer", "producer epoch",
+                    "sequence number deduplication", "transactional api",
+                    "read-committed isolation", "exactly-once semantics",
+                    "producer id pid",
+                ],
+                "min_length": 60,
+            },
+            # Turn 6 — Throughput & back-pressure
+            {
+                "question": (
+                    "A slow consumer is falling **millions of messages behind** "
+                    "producers. How does your system handle **consumer lag** and "
+                    "back-pressure? What operational levers do you have, "
+                    "and when would you drop or delay messages?"
+                ),
+                "required_groups": [
+                    ["consumer lag", "lag", "behind", "slow consumer",
+                     "back-pressure", "backpressure"],
+                    ["retention", "ttl", "expire", "delete old messages",
+                     "disk full", "log retention"],
+                    ["scale", "more consumer", "partition", "rebalance",
+                     "monitor", "alert", "lag metric"],
+                ],
+                "bonus": [
+                    "consumer lag metric", "lag monitoring",
+                    "add partitions", "consumer group rebalance",
+                    "retention policy", "log compaction",
+                    "dead letter queue", "circuit breaker consumer",
+                ],
+                "min_length": 60,
+            },
+            # Turn 7 — Final review
+            {
+                "question": (
+                    "**Final review:** Summarise your distributed message queue "
+                    "design end-to-end. Cover: partitioning strategy, durability, "
+                    "consumer group isolation, replication, delivery semantics, "
+                    "and the single biggest remaining limitation or trade-off."
+                ),
+                "required_groups": [
+                    ["partition", "topic partition"],
+                    ["durable", "persist", "write-ahead log", "log", "disk"],
+                    ["consumer group", "offset", "isolation"],
+                    ["replica", "replication", "leader", "isr"],
+                    ["limitation", "trade-off", "tradeoff", "drawback",
+                     "bottleneck", "challenge"],
+                ],
+                "bonus": [
+                    "exactly-once", "idempotent", "log compaction",
+                    "consumer lag", "kraft", "zookeeper",
+                    "horizontal scaling", "partition hotspot",
+                ],
+                "min_length": 80,
+            },
+        ],
+    },
 }
 
 # Ordered list used for auto-cycling across episodes
-TASK_ORDER = ["two_sum", "lru_cache", "rate_limiter"]
+TASK_ORDER = ["two_sum", "lru_cache", "median_stream", "rate_limiter", "message_queue"]
 
 
 # ---------------------------------------------------------------------------
@@ -597,9 +933,9 @@ class MultiturnTechnicalInterviewerEnvironment(Environment):
     """
     Multi-turn Technical Interviewer OpenEnv environment.
 
-    On each ``reset()`` the environment cycles to the next task (two_sum →
-    lru_cache → rate_limiter → two_sum → …), so three consecutive episodes
-    cover all three tasks.
+    On each ``reset()`` the environment cycles to the next task
+    (two_sum → lru_cache → median_stream → rate_limiter → message_queue →
+    two_sum → …), so five consecutive episodes cover all five tasks.
 
     The ``INTERVIEW_TASK`` environment variable can pin the starting task.
 

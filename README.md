@@ -25,7 +25,7 @@ complexity, edge cases, concurrency, and distributed systems design.
 Each answer is graded with a deterministic keyword-matching rubric, providing
 **dense per-turn reward signals** throughout the episode. A bad early answer
 compounds — the environment is designed to stress multi-turn reasoning under
-natural difficulty escalation.
+natural difficulty escalation across **five tasks of increasing difficulty**.
 
 ---
 
@@ -37,7 +37,7 @@ natural difficulty escalation.
 | **Observation** | Interviewer question + full conversation history |
 | **Reward** | `[0.0, 1.0]` per turn via keyword grading |
 | **Episode length** | 5–7 turns depending on task |
-| **Tasks** | 3 (easy → medium → hard) |
+| **Tasks** | 5 (easy → medium → medium → hard → hard) |
 
 ---
 
@@ -61,7 +61,7 @@ class MultiturnTechnicalInterviewerObservation(Observation):
     question: str                    # Interviewer's current question
     turn: int                        # Current turn (0 = problem statement)
     max_turns: int                   # Total graded turns in this episode
-    task_name: str                   # "two_sum" | "lru_cache" | "rate_limiter"
+    task_name: str                   # "two_sum" | "lru_cache" | "median_stream" | "rate_limiter" | "message_queue"
     task_difficulty: str             # "easy" | "medium" | "hard"
     task_display_name: str           # Human-readable task name
     conversation_history: List[str]  # Full conversation so far
@@ -113,7 +113,28 @@ consistent hashing, Redis, write-through, TTL, eventual consistency.
 
 ---
 
-### Task 3 — Distributed Rate Limiter (Hard, 7 turns)
+### Task 3 — Median of a Data Stream (Medium, 6 turns)
+
+**Problem:** Design a data structure supporting `addNum(num)` and
+`findMedian()` on a continuous stream of integers. `findMedian()` must be
+as fast as possible.
+
+| Turn | Question |
+|------|----------|
+| 0 | Problem statement |
+| 1 | Two-heap design — why max-heap for lower half / min-heap for upper half, how `addNum` rebalances |
+| 2 | Time/space complexity comparison vs. a sorted-list approach |
+| 3 | Edge cases — empty stream, single element, duplicates, large integers |
+| 4 | Scale — 1 billion numbers, approximate median without storing all values |
+| 5 | Sliding window median variant — lazy deletion, complexity |
+| 6 | Final review — complexity summary, limitations |
+
+**Grading keywords:** max heap, min heap, O(log n), O(1) findMedian, rebalance,
+edge cases, reservoir sampling / t-digest / histogram (for scale), lazy deletion.
+
+---
+
+### Task 4 — Distributed Rate Limiter (Hard, 7 turns)
 
 **Problem:** Design a rate limiter enforcing 100 req/user/min at scale (50+ servers).
 
@@ -130,6 +151,28 @@ consistent hashing, Redis, write-through, TTL, eventual consistency.
 
 **Grading keywords:** token bucket, sliding window, Redis, Lua script,
 atomic, centralized store, fail open, circuit breaker, OAuth/API key.
+
+---
+
+### Task 5 — Distributed Message Queue (Hard, 7 turns)
+
+**Problem:** Design a distributed message queue (Kafka-style) supporting
+millions of producers/consumers, durable storage, and per-partition ordering.
+
+| Turn | Question |
+|------|----------|
+| 0 | Problem statement |
+| 1 | Partitioning — throughput, ordering, producer routing strategy |
+| 2 | Durability — append-only log, WAL, fsync, crash recovery |
+| 3 | Consumer groups & offsets — isolation, commit strategies |
+| 4 | Replication & leader election — ISR set, broker crash, ZooKeeper/Raft |
+| 5 | Delivery semantics — at-most-once vs at-least-once vs exactly-once |
+| 6 | Consumer lag & back-pressure — retention, rebalance, dead-letter queues |
+| 7 | Final review — end-to-end design summary |
+
+**Grading keywords:** partition, append-only log, write-ahead log, consumer
+group, offset, ISR, leader election, exactly-once, idempotent producer,
+consumer lag, retention policy.
 
 ---
 
@@ -169,9 +212,9 @@ step(response_N)     → Observation(question=<closing>, turn=N, done=True, rewa
 ```
 
 The environment **auto-cycles through tasks** on consecutive `reset()` calls:
-`two_sum → lru_cache → rate_limiter → two_sum → …`
+`two_sum → lru_cache → median_stream → rate_limiter → message_queue → two_sum → …`
 
-Set `INTERVIEW_TASK=lru_cache` (env var) to pin the starting task.
+Set `INTERVIEW_TASK=median_stream` (or any task name) to pin the starting task.
 
 ---
 
@@ -213,7 +256,7 @@ export IMAGE_NAME=multiturn_technical_interviewer-env:latest
 python inference.py
 ```
 
-Expected output (three tasks, one block each):
+Expected output (five tasks, one block each):
 
 ```
 [START] task=two_sum env=multiturn_technical_interviewer model=Qwen/Qwen2.5-72B-Instruct
@@ -223,6 +266,15 @@ Expected output (three tasks, one block each):
 [END] success=true steps=5 score=0.693 rewards=0.72,0.68,0.71,0.65,0.66
 
 [START] task=lru_cache env=multiturn_technical_interviewer model=Qwen/Qwen2.5-72B-Instruct
+...
+
+[START] task=median_stream env=multiturn_technical_interviewer model=Qwen/Qwen2.5-72B-Instruct
+...
+
+[START] task=rate_limiter env=multiturn_technical_interviewer model=Qwen/Qwen2.5-72B-Instruct
+...
+
+[START] task=message_queue env=multiturn_technical_interviewer model=Qwen/Qwen2.5-72B-Instruct
 ...
 ```
 
@@ -240,7 +292,7 @@ multiturn_technical_interviewer/
 ├── validate-submission.sh # Pre-submission validation script
 ├── client.py              # MultiturnTechnicalInterviewerEnv HTTP/WS client
 ├── models.py              # Action and Observation Pydantic models
-├── inference.py           # Baseline inference script (all 3 tasks)
+├── inference.py           # Baseline inference script (all 5 tasks)
 └── server/
     ├── __init__.py
     ├── app.py             # FastAPI application
@@ -257,11 +309,14 @@ Baseline run with `Qwen/Qwen2.5-72B-Instruct` via HuggingFace Inference Router:
 |------|-----------|-------|----------------|
 | two_sum | Easy | 5 | ~0.68 |
 | lru_cache | Medium | 6 | ~0.63 |
+| median_stream | Medium | 6 | ~0.61 |
 | rate_limiter | Hard | 7 | ~0.58 |
+| message_queue | Hard | 7 | ~0.55 |
 
 Scores reflect the keyword-graded rubric. Frontier models (GPT-4o, Claude 3.5)
-typically achieve 0.75–0.90. The hard task (rate_limiter) genuinely challenges
-models with its multi-layered systems design requirements.
+typically achieve 0.75–0.90. The hard tasks (rate_limiter, message_queue)
+genuinely challenge models with their multi-layered distributed systems
+design requirements.
 
 ---
 

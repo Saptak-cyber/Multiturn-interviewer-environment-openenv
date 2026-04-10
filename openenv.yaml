@@ -1,0 +1,48 @@
+spec_version: 1
+name: multiturn_technical_interviewer
+type: space
+runtime: fastapi
+app: server.app:app
+port: 8000
+
+description: >
+  A multi-turn technical interview simulator that evaluates an agent's ability
+  to solve algorithmic problems, optimise solutions, handle edge cases, and
+  reason about distributed systems — all within a coherent conversation arc.
+
+tasks:
+  - name: two_sum
+    display_name: "Two Sum"
+    difficulty: easy
+    max_turns: 5
+    description: >
+      Classic algorithmic problem. The agent submits a solution then defends
+      it across 5 follow-up turns covering time complexity, space trade-offs,
+      edge cases, and distributed scaling.
+
+  - name: lru_cache
+    display_name: "LRU Cache"
+    difficulty: medium
+    max_turns: 6
+    description: >
+      Data-structure design task. The agent must design an O(1) LRU Cache,
+      explain the implementation, handle edge cases, address thread safety,
+      and scale the design to a distributed cache.
+
+  - name: rate_limiter
+    display_name: "Distributed Rate Limiter"
+    difficulty: hard
+    max_turns: 7
+    description: >
+      System-design task. The agent designs a per-user rate limiter from
+      single-server to 50-node distributed deployment, addressing algorithm
+      trade-offs, race conditions, failure handling, and anti-evasion.
+
+reward:
+  type: continuous
+  range: [0.0, 1.0]
+  description: >
+    Per-turn reward based on deterministic keyword matching against expected
+    technical vocabulary. Episode score is the mean reward across all turns.
+    Rewards partial progress — thin answers score 0.1–0.3, solid answers
+    0.6–0.8, comprehensive answers 0.8–1.0.

@@ -38,7 +38,7 @@ except Exception as e:  # pragma: no cover
 try:
     from ..models import MultiturnTechnicalInterviewerAction, MultiturnTechnicalInterviewerObservation
     from .multiturn_technical_interviewer_environment import MultiturnTechnicalInterviewerEnvironment
-except ModuleNotFoundError:
+except ImportError:
     from models import MultiturnTechnicalInterviewerAction, MultiturnTechnicalInterviewerObservation
     from server.multiturn_technical_interviewer_environment import MultiturnTechnicalInterviewerEnvironment
 

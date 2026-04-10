@@ -30,7 +30,8 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-from client import MultiturnTechnicalInterviewerAction, MultiturnTechnicalInterviewerEnv
+from models import MultiturnTechnicalInterviewerAction
+from client import MultiturnTechnicalInterviewerEnv
 
 # ---------------------------------------------------------------------------
 # Configuration

@@ -53,32 +53,30 @@ app = create_app(
 )
 
 
-def main(host: str = "0.0.0.0", port: int = 8000):
+def main(host: str = "0.0.0.0", port: int | None = None) -> None:
     """
     Entry point for direct execution via uv run or python -m.
 
     This function enables running the server without Docker:
         uv run --project . server
-        uv run --project . server --port 8001
-        python -m multiturn_technical_interviewer.server.app
+        python -m server.app
 
-    Args:
-        host: Host address to bind to (default: "0.0.0.0")
-        port: Port number to listen on (default: 8000)
+    Port: uses ``port`` if given, else ``PORT`` / ``SERVER_PORT`` env (HF Spaces),
+    else 8000.
 
     For production deployments, consider using uvicorn directly with
     multiple workers:
-        uvicorn multiturn_technical_interviewer.server.app:app --workers 4
+        uvicorn server.app:app --host 0.0.0.0 --port 8000 --workers 4
     """
+    import os
+
     import uvicorn
+
+    if port is None:
+        port = int(os.environ.get("PORT", os.environ.get("SERVER_PORT", "8000")))
 
     uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
-    args = parser.parse_args()
-    main(port=args.port)
+    main()

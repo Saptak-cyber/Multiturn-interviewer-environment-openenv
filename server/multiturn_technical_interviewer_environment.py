@@ -595,18 +595,36 @@ class MultiturnTechnicalInterviewerEnvironment(Environment):
     step(answer_N)   → grades answer_N, done=True           (turn N, reward rN)
 
     Episode score = mean(r₁ … rN).
+
+    Implementation note
+    -------------------
+    ``_global_episode_index`` is a **class-level** counter so that it is
+    shared across all server-side instances.  The OpenEnv framework creates
+    a fresh instance for every WebSocket session, so an instance-level counter
+    would reset to 0 on every new connection and always return ``two_sum``.
+    The class-level counter survives reconnections and advances correctly
+    through the three tasks even when the inference script opens a new
+    connection per episode.
     """
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
+
+    # Shared across every instance on this server process so task cycling
+    # works correctly even when a new env instance is created per WS session.
+    _global_episode_index: int = 0
 
     def __init__(self) -> None:
         start_task = os.getenv("INTERVIEW_TASK", "two_sum")
         if start_task not in TASKS:
             start_task = "two_sum"
-        self._start_task = start_task
 
-        # Index into TASK_ORDER; incremented on each reset
-        self._episode_index: int = TASK_ORDER.index(start_task)
+        # Align the class-level counter to the requested start task only on
+        # the very first instantiation (index == 0 and env var is set).
+        if MultiturnTechnicalInterviewerEnvironment._global_episode_index == 0:
+            MultiturnTechnicalInterviewerEnvironment._global_episode_index = (
+                TASK_ORDER.index(start_task)
+            )
+
         self._state = State(episode_id=str(uuid4()), step_count=0)
 
         # Per-episode mutable state
@@ -620,9 +638,13 @@ class MultiturnTechnicalInterviewerEnvironment(Environment):
     # ------------------------------------------------------------------
     def reset(self) -> MultiturnTechnicalInterviewerObservation:
         """Reset the environment and advance to the next task."""
-        # Cycle through tasks
-        task_name = TASK_ORDER[self._episode_index % len(TASK_ORDER)]
-        self._episode_index += 1
+        # Cycle through tasks using the class-level counter so the sequence
+        # advances correctly even when a new instance is created per session.
+        task_name = TASK_ORDER[
+            MultiturnTechnicalInterviewerEnvironment._global_episode_index
+            % len(TASK_ORDER)
+        ]
+        MultiturnTechnicalInterviewerEnvironment._global_episode_index += 1
 
         self._task_name = task_name
         self._task_cfg = TASKS[task_name]

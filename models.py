@@ -20,7 +20,7 @@ Three tasks of increasing difficulty:
 from typing import List, Optional
 
 from openenv.core.env_server.types import Action, Observation
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 
 class MultiturnTechnicalInterviewerAction(Action):
@@ -29,15 +29,22 @@ class MultiturnTechnicalInterviewerAction(Action):
 
     This is the agent's spoken answer during the interview — a solution,
     explanation, code snippet, or design discussion as appropriate.
+
+    Notes for the OpenEnv Gradio UI:
+    - Empty text fields are omitted from the JSON payload, so ``response`` must
+      have a default; otherwise Step sends ``{}`` and validation fails.
+    - The web chat path sends ``message``; ``validation_alias`` maps it to
+      ``response``.
     """
 
     response: str = Field(
-        ...,
+        default="",
         description=(
             "The agent's complete answer to the interviewer's current question. "
             "Should include reasoning, code (if applicable), complexity analysis, "
             "and discussion of trade-offs."
         ),
+        validation_alias=AliasChoices("response", "message"),
     )
 
 

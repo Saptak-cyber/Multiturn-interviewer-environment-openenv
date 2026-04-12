@@ -4,9 +4,12 @@ Multi-turn Technical Interviewer — Inference Script
 
 MANDATORY ENVIRONMENT VARIABLES
 ---------------------------------
-  API_BASE_URL    LLM API endpoint  (default: https://router.huggingface.co/v1)
-  MODEL_NAME      Model identifier  (default: Qwen/Qwen2.5-72B-Instruct)
-  HF_TOKEN        Hugging Face / API key
+  NVIDIA_API_KEY  NVIDIA API key (or API_KEY; HF_TOKEN accepted as fallback)
+  API_BASE_URL    OpenAI-compatible base URL
+                  (default: https://integrate.api.nvidia.com/v1)
+  MODEL_NAME      Model identifier
+                  (default: nvidia/nemotron-3-super-120b-a12b — Nemotron 3 Super via NIM)
+  NEMOTRON_THINKING  off | low | full — reasoning trace mode (default: off; faster)
   IMAGE_NAME      Docker image name (optional; if set, spins up a container)
   BASE_URL        Direct server URL (used when IMAGE_NAME is not set;
                   default: http://localhost:8000)
@@ -24,7 +27,7 @@ Five episodes are run in sequence, one per task (server cycles TASK_ORDER):
   4. rate_limiter   (hard)
   5. message_queue  (hard)
 
-  Override count with NUM_EPISODES (e.g. NUM_EPISODES=1 for a single episode).
+Override count with NUM_EPISODES (e.g. NUM_EPISODES=1 for a single episode).
 
   OUTPUT_DIR       Directory for baseline_scores.json (default: outputs)
 """
@@ -48,9 +51,15 @@ from client import MultiturnTechnicalInterviewerEnv
 IMAGE_NAME: Optional[str] = os.getenv("IMAGE_NAME")
 BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
 
-API_KEY: Optional[str] = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_KEY: Optional[str] = (
+    os.getenv("NVIDIA_API_KEY") or os.getenv("API_KEY") or os.getenv("HF_TOKEN")
+)
+API_BASE_URL: str = os.getenv(
+    "API_BASE_URL", "https://integrate.api.nvidia.com/v1"
+)
+MODEL_NAME: str = os.getenv(
+    "MODEL_NAME", "nvidia/nemotron-3-super-120b-a12b"
+)
 
 BENCHMARK: str = "multiturn_technical_interviewer"
 
@@ -60,8 +69,19 @@ NUM_EPISODES: int = max(1, int(os.getenv("NUM_EPISODES", "5")))
 # Per-episode limits
 MAX_STEPS: int = 10          # safety ceiling; episodes end via done=True
 SUCCESS_SCORE_THRESHOLD: float = 0.40   # average reward >= this → success
-TEMPERATURE: float = 0.3     # lower temperature for more focused answers
-MAX_TOKENS: int = 280        # short answers reduce LLM latency → fewer WS keepalive timeouts
+# Nemotron 3 Super: NVIDIA recommends temperature=1.0, top_p=0.95 (override via env).
+TEMPERATURE: float = float(os.getenv("TEMPERATURE", "1.0"))
+TOP_P: float = float(os.getenv("TOP_P", "0.95"))
+MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "512"))  # room for brief answer; raise if using thinking
+
+# Nemotron chat-template flags — see NVIDIA NIM docs for nemotron-3-super-120b-a12b
+_nem_think = os.getenv("NEMOTRON_THINKING", "off").strip().lower()
+if _nem_think in ("full", "on", "true", "1", "yes"):
+    _NEMOTRON_CHAT_TEMPLATE_KWARGS = {"enable_thinking": True}
+elif _nem_think in ("low",):
+    _NEMOTRON_CHAT_TEMPLATE_KWARGS = {"enable_thinking": True, "low_effort": True}
+else:
+    _NEMOTRON_CHAT_TEMPLATE_KWARGS = {"enable_thinking": False}
 
 # ---------------------------------------------------------------------------
 # Logging helpers (mandatory format)
@@ -218,8 +238,12 @@ def get_model_response(
                 {"role": "user", "content": user_prompt},
             ],
             temperature=TEMPERATURE,
+            top_p=TOP_P,
             max_tokens=MAX_TOKENS,
             stream=False,
+            extra_body={
+                "chat_template_kwargs": dict(_NEMOTRON_CHAT_TEMPLATE_KWARGS),
+            },
         )
         text = (completion.choices[0].message.content or "").strip()
         return text if text else "I need a moment to think about this."
@@ -358,6 +382,12 @@ async def run_episode(
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
+    if not API_KEY:
+        print(
+            "[ERROR] Missing API key: set NVIDIA_API_KEY (or API_KEY) for the NVIDIA API.",
+            flush=True,
+        )
+        raise SystemExit(1)
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     episodes: List[Dict[str, Any]] = []
 
@@ -400,6 +430,10 @@ async def main() -> None:
             "num_episodes_requested": NUM_EPISODES,
             "base_url": BASE_URL,
             "image_name": IMAGE_NAME,
+            "temperature": TEMPERATURE,
+            "top_p": TOP_P,
+            "max_tokens": MAX_TOKENS,
+            "nemotron_thinking": os.getenv("NEMOTRON_THINKING", "off"),
         },
     )
 

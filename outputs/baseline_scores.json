@@ -1,0 +1,97 @@
+{
+  "generated_at": "2026-04-12T10:49:22.531274+00:00",
+  "script": "inference_nvidea.py",
+  "benchmark": "multiturn_technical_interviewer",
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "output_dir": "outputs",
+  "mean_episode_score": 0.834845,
+  "num_episodes": 5,
+  "episodes": [
+    {
+      "task_name": "two_sum",
+      "task_difficulty": "easy",
+      "steps": 5,
+      "episode_score": 0.8862,
+      "success": true,
+      "rewards": [
+        0.969,
+        0.873,
+        0.853,
+        0.79,
+        0.946
+      ]
+    },
+    {
+      "task_name": "lru_cache",
+      "task_difficulty": "medium",
+      "steps": 6,
+      "episode_score": 0.853167,
+      "success": true,
+      "rewards": [
+        0.79,
+        0.826,
+        0.853,
+        0.978,
+        0.846,
+        0.826
+      ]
+    },
+    {
+      "task_name": "median_stream",
+      "task_difficulty": "medium",
+      "steps": 6,
+      "episode_score": 0.832,
+      "success": true,
+      "rewards": [
+        0.861,
+        0.79,
+        0.873,
+        0.821,
+        0.821,
+        0.826
+      ]
+    },
+    {
+      "task_name": "rate_limiter",
+      "task_difficulty": "hard",
+      "steps": 7,
+      "episode_score": 0.776857,
+      "success": true,
+      "rewards": [
+        0.54,
+        0.821,
+        0.821,
+        0.79,
+        0.846,
+        0.946,
+        0.674
+      ]
+    },
+    {
+      "task_name": "message_queue",
+      "task_difficulty": "hard",
+      "steps": 7,
+      "episode_score": 0.826,
+      "success": true,
+      "rewards": [
+        0.79,
+        0.821,
+        0.818,
+        0.853,
+        0.826,
+        0.79,
+        0.884
+      ]
+    }
+  ],
+  "config": {
+    "api_base_url": "https://integrate.api.nvidia.com/v1",
+    "num_episodes_requested": 5,
+    "base_url": "http://localhost:8000",
+    "image_name": null,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "max_tokens": 512,
+    "nemotron_thinking": "off"
+  }
+}

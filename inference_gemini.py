@@ -1,15 +1,26 @@
 """
-Multi-turn Technical Interviewer — Inference Script
-====================================================
+Multi-turn Technical Interviewer — Inference Script (Google Gemini)
+===================================================================
+
+Uses the Gemini API via its OpenAI-compatible HTTP API (same ``openai`` client).
 
 MANDATORY ENVIRONMENT VARIABLES
 ---------------------------------
-  API_BASE_URL    LLM API endpoint  (default: https://router.huggingface.co/v1)
-  MODEL_NAME      Model identifier  (default: Qwen/Qwen2.5-72B-Instruct)
-  HF_TOKEN        Hugging Face / API key
-  IMAGE_NAME      Docker image name (optional; if set, spins up a container)
-  BASE_URL        Direct server URL (used when IMAGE_NAME is not set;
-                  default: http://localhost:8000)
+  GEMINI_API_KEY   Google AI Studio / Gemini API key (preferred)
+  GOOGLE_API_KEY   Same key; accepted if GEMINI_API_KEY is unset
+
+Optional:
+  GEMINI_API_BASE_URL  Override Gemini OpenAI-compat base URL (default: Google
+                       generativelanguage …/v1beta/openai/).  Do not use
+                       API_BASE_URL here — that variable is often set for
+                       Hugging Face and will cause 401 if reused with a Gemini key.
+  MODEL_NAME           Gemini model id (default: gemini-2.5-pro)
+  GEMINI_MAX_OUTPUT_TOKENS  Max completion tokens (default: 8192).  Gemini 2.5
+                       “thinking” models use much of this budget before visible
+                       text; values like 280 often yield empty replies.
+  IMAGE_NAME       Docker image name (optional; if set, spins up a container)
+  BASE_URL         Direct server URL (used when IMAGE_NAME is not set;
+                   default: http://localhost:8000)
 
 STDOUT FORMAT (strictly required by the evaluator)
 ---------------------------------------------------
@@ -24,7 +35,7 @@ Five episodes are run in sequence, one per task (server cycles TASK_ORDER):
   4. rate_limiter   (hard)
   5. message_queue  (hard)
 
-  Override count with NUM_EPISODES (e.g. NUM_EPISODES=1 for a single episode).
+Override count with NUM_EPISODES (e.g. NUM_EPISODES=1 for a single episode).
 
   OUTPUT_DIR       Directory for baseline_scores.json (default: outputs)
 """
@@ -48,9 +59,26 @@ from client import MultiturnTechnicalInterviewerEnv
 IMAGE_NAME: Optional[str] = os.getenv("IMAGE_NAME")
 BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
 
-API_KEY: Optional[str] = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+# Gemini API key (AI Studio: https://aistudio.google.com/apikey)
+# GOOGLE_API_KEY is the same credential name Google often exports.
+API_KEY: Optional[str] = (
+    os.getenv("GEMINI_API_KEY")
+    or os.getenv("GOOGLE_API_KEY")
+    or os.getenv("API_KEY")
+)
+
+# OpenAI-compatible endpoint for Gemini (see Google AI Gemini OpenAI API docs)
+_DEFAULT_GEMINI_OPENAI_BASE = (
+    "https://generativelanguage.googleapis.com/v1beta/openai/"
+)
+# Intentionally NOT reading API_BASE_URL: it is commonly set to the HF router for
+# inference.py and produces 401 "Invalid username or password" when combined
+# with a Gemini API key.
+GEMINI_LLM_BASE_URL: str = os.getenv(
+    "GEMINI_API_BASE_URL",
+    _DEFAULT_GEMINI_OPENAI_BASE,
+)
+MODEL_NAME: str = os.getenv("MODEL_NAME", "gemini-2.5-pro")
 
 BENCHMARK: str = "multiturn_technical_interviewer"
 
@@ -61,7 +89,9 @@ NUM_EPISODES: int = max(1, int(os.getenv("NUM_EPISODES", "5")))
 MAX_STEPS: int = 10          # safety ceiling; episodes end via done=True
 SUCCESS_SCORE_THRESHOLD: float = 0.40   # average reward >= this → success
 TEMPERATURE: float = 0.3     # lower temperature for more focused answers
-MAX_TOKENS: int = 280        # short answers reduce LLM latency → fewer WS keepalive timeouts
+# Gemini 2.5+ thinking consumes output token budget before `message.content` appears.
+# Do not reuse inference.py's 280 here — that commonly produces empty content.
+MAX_TOKENS: int = max(512, int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "8192")))
 
 # ---------------------------------------------------------------------------
 # Logging helpers (mandatory format)
@@ -221,8 +251,20 @@ def get_model_response(
             max_tokens=MAX_TOKENS,
             stream=False,
         )
-        text = (completion.choices[0].message.content or "").strip()
-        return text if text else "I need a moment to think about this."
+        msg = completion.choices[0].message
+        text = (msg.content or "").strip()
+        if not text:
+            refusal = getattr(msg, "refusal", None)
+            fr = getattr(completion.choices[0], "finish_reason", None)
+            usage = getattr(completion, "usage", None)
+            print(
+                f"[DEBUG] Empty model reply finish_reason={fr!r} "
+                f"refusal={refusal!r} usage={usage!r} "
+                f"(raise GEMINI_MAX_OUTPUT_TOKENS if thinking exhausted the budget)",
+                flush=True,
+            )
+            return "I need a moment to think about this."
+        return text
     except Exception as exc:
         print(f"[DEBUG] Model request failed: {exc}", flush=True)
         return "I need a moment to think about this."
@@ -358,7 +400,28 @@ async def run_episode(
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    if not API_KEY:
+        print(
+            "[ERROR] Set GEMINI_API_KEY (or GOOGLE_API_KEY) to your Google AI API key.",
+            flush=True,
+        )
+        raise SystemExit(1)
+
+    _legacy = os.getenv("API_BASE_URL", "")
+    if _legacy and "huggingface" in _legacy.lower():
+        print(
+            "[WARN] API_BASE_URL is set to Hugging Face; this script ignores it and "
+            "uses GEMINI_LLM_BASE_URL for the model. Unset API_BASE_URL or set "
+            "GEMINI_API_BASE_URL explicitly if you need a custom Gemini host.",
+            flush=True,
+        )
+    print(
+        f"[DEBUG] Gemini LLM base: {GEMINI_LLM_BASE_URL!r} model={MODEL_NAME!r} "
+        f"max_tokens={MAX_TOKENS}",
+        flush=True,
+    )
+
+    client = OpenAI(base_url=GEMINI_LLM_BASE_URL, api_key=API_KEY)
     episodes: List[Dict[str, Any]] = []
 
     if IMAGE_NAME:
@@ -396,10 +459,12 @@ async def main() -> None:
         benchmark=BENCHMARK,
         model=MODEL_NAME,
         extras={
-            "api_base_url": API_BASE_URL,
+            "gemini_api_base_url": GEMINI_LLM_BASE_URL,
             "num_episodes_requested": NUM_EPISODES,
             "base_url": BASE_URL,
             "image_name": IMAGE_NAME,
+            "temperature": TEMPERATURE,
+            "max_tokens": MAX_TOKENS,
         },
     )
 

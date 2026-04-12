@@ -242,6 +242,8 @@ docker run -p 8000:8000 multiturn_technical_interviewer-env:latest
 
 ### Running inference
 
+**Hugging Face Router (default `inference.py`):**
+
 ```bash
 export HF_TOKEN=hf_...
 export MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
@@ -255,6 +257,21 @@ python inference.py
 export IMAGE_NAME=multiturn_technical_interviewer-env:latest
 python inference.py
 ```
+
+After a successful run, episode metrics are written to **`outputs/baseline_scores.json`**
+(override directory with **`OUTPUT_DIR`**). The same applies to `inference_nvidea.py` and
+`inference_gemini.py`.
+
+**NVIDIA NIM API (`inference_nvidea.py`) — Nemotron 3 Super:**
+
+```bash
+export NVIDIA_API_KEY=nvapi_...
+# Optional: NEMOTRON_THINKING=off|low|full  TEMPERATURE TOP_P MAX_TOKENS
+export BASE_URL=http://localhost:8000
+python inference_nvidea.py
+```
+
+Defaults: `API_BASE_URL=https://integrate.api.nvidia.com/v1`, `MODEL_NAME=nvidia/nemotron-3-super-120b-a12b`.
 
 Expected output (five tasks, one block each):
 
@@ -292,7 +309,10 @@ multiturn_technical_interviewer/
 ├── validate-submission.sh # Pre-submission validation script
 ├── client.py              # MultiturnTechnicalInterviewerEnv HTTP/WS client
 ├── models.py              # Action and Observation Pydantic models
-├── inference.py           # Baseline inference script (all 5 tasks)
+├── inference.py           # Baseline inference (HF Router / OpenAI-compatible)
+├── inference_nvidea.py    # NVIDIA NIM — Nemotron 3 Super
+├── inference_gemini.py    # Google Gemini
+├── baseline_scores_output.py  # Writes outputs/baseline_scores.json after inference
 └── server/
     ├── __init__.py
     ├── app.py             # FastAPI application
@@ -303,7 +323,32 @@ multiturn_technical_interviewer/
 
 ## Baseline Scores
 
-Baseline run with `Qwen/Qwen2.5-72B-Instruct` via HuggingFace Inference Router:
+Episode score is the **mean per-turn reward** (see [Reward Function](#reward-function)).
+**Success** is episode score ≥ 0.40.
+
+### NVIDIA Nemotron 3 Super 120B-A12B (NIM API)
+
+Run: `inference_nvidea.py` with model `nvidia/nemotron-3-super-120b-a12b`,
+endpoint `https://integrate.api.nvidia.com/v1`, against a local server
+(`BASE_URL=http://localhost:8000`). One full pass over all five tasks.
+
+| Task | Difficulty | Graded steps | Episode score | Per-turn rewards |
+|------|------------|--------------|---------------|------------------|
+| two_sum | Easy | 5 | **0.886** | 0.97, 0.87, 0.85, 0.79, 0.95 |
+| lru_cache | Medium | 6 | **0.853** | 0.79, 0.83, 0.85, 0.98, 0.85, 0.83 |
+| median_stream | Medium | 6 | **0.832** | 0.86, 0.79, 0.87, 0.82, 0.82, 0.83 |
+| rate_limiter | Hard | 7 | **0.777** | 0.54, 0.82, 0.82, 0.79, 0.85, 0.95, 0.67 |
+| message_queue | Hard | 7 | **0.826** | 0.79, 0.82, 0.82, 0.85, 0.83, 0.79, 0.88 |
+
+**Aggregate:** mean episode score over five tasks ≈ **0.835** (all tasks succeeded).
+
+Sync LLM calls run in `asyncio.to_thread` so the WebSocket client can handle
+keepalive pings during long completions; episode metrics are also saved to
+`outputs/baseline_scores.json` (see [Quick Start](#quick-start)).
+
+### Reference — Qwen2.5-72B-Instruct (Hugging Face Inference Router)
+
+Approximate baseline with `inference.py`:
 
 | Task | Difficulty | Turns | Baseline Score |
 |------|-----------|-------|----------------|
@@ -313,10 +358,9 @@ Baseline run with `Qwen/Qwen2.5-72B-Instruct` via HuggingFace Inference Router:
 | rate_limiter | Hard | 7 | ~0.58 |
 | message_queue | Hard | 7 | ~0.55 |
 
-Scores reflect the keyword-graded rubric. Frontier models (GPT-4o, Claude 3.5)
-typically achieve 0.75–0.90. The hard tasks (rate_limiter, message_queue)
-genuinely challenge models with their multi-layered distributed systems
-design requirements.
+Scores reflect the keyword-graded rubric. Frontier models often land in the
+0.75–0.90 range on episode means. The hard tasks (`rate_limiter`, `message_queue`)
+stress multi-layered distributed-systems answers.
 
 ---
 

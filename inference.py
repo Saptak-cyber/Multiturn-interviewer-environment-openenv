@@ -41,6 +41,15 @@ from baseline_scores_output import write_baseline_scores
 from models import MultiturnTechnicalInterviewerAction
 from client import MultiturnTechnicalInterviewerEnv
 
+# Ensure TLS verification works on macOS Python builds that miss system certs.
+# This is especially relevant for wss://*.hf.space connections.
+try:
+    import certifi
+
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except Exception:
+    pass
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
